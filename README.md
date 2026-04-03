@@ -1,9 +1,9 @@
-# tenaz
+ tenaz
 
 [![PyPI version](https://img.shields.io/pypi/v/tenaz)](https://pypi.org/project/tenaz/)
 [![Python versions](https://img.shields.io/pypi/pyversions/tenaz)](https://pypi.org/project/tenaz/)
 [![License](https://img.shields.io/pypi/l/tenaz)](https://github.com/ElEscribanoSilente/tenaz/blob/main/LICENSE)
-[![CI](https://img.shields.io/github/actions/workflow/status/tenaz-py/tenaz/ci.yml?label=tests)](https://github.com/ElEscribanoSilente/tenaz/actions)
+[![CI](https://img.shields.io/github/actions/workflow/status/ElEscribanoSilente/tenaz/ci.yml?label=tests)](https://github.com/ElEscribanoSilente/tenaz/actions)
 [![Downloads](https://img.shields.io/pypi/dm/tenaz)](https://pypistats.org/packages/tenaz)
 
 **Production-grade retry with built-in circuit breaker for Python.**
@@ -555,26 +555,4 @@ A: `RetryExhausted` means all `max_attempts` were used. `RetryTimeout` means `to
 
 ## License
 
-MIT — do whatever you want.
-
-```
-Copyright 2025
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-```
+MIT — see [LICENSE](LICENSE).
