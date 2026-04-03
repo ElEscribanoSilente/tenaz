@@ -98,7 +98,6 @@ class _CircuitBreaker:
     _state: _BreakerState = field(default=_BreakerState.CLOSED, init=False)
     _failures: int = field(default=0, init=False)
     _opened_at: float = field(default=0.0, init=False)
-    _half_open_allowed: bool = field(default=False, init=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False)
 
     @property
@@ -107,14 +106,12 @@ class _CircuitBreaker:
             if self._state == _BreakerState.CLOSED:
                 return False
             if self._state == _BreakerState.HALF_OPEN:
-                if self._half_open_allowed:
-                    self._half_open_allowed = False
-                    return False  # allow exactly one probe
-                return True  # reject all others
+                # Probe already in flight — reject everyone else
+                return True
             # OPEN — check if timeout expired
             if time.monotonic() - self._opened_at >= self.timeout:
+                # Transition to HALF_OPEN: this caller IS the probe
                 self._state = _BreakerState.HALF_OPEN
-                self._half_open_allowed = False  # this caller is the probe
                 return False
             return True
 
@@ -145,9 +142,20 @@ class _CircuitBreaker:
             self._failures = 0
 
     def open_until(self) -> float:
-        """Return the monotonic timestamp when the breaker will half-open."""
+        """Return monotonic timestamp estimating when the breaker may allow a call.
+
+        - OPEN: returns when the timeout expires and half-open probe begins.
+        - HALF_OPEN: probe in flight — returns now + timeout (if probe fails,
+          the breaker reopens for a full timeout period).
+        - CLOSED: returns 0.0 (breaker is not blocking).
+        """
         with self._lock:
-            return self._opened_at + self.timeout
+            if self._state == _BreakerState.OPEN:
+                return self._opened_at + self.timeout
+            if self._state == _BreakerState.HALF_OPEN:
+                # Probe in progress; if it fails, breaker reopens for full timeout
+                return time.monotonic() + self.timeout
+            return 0.0
 
 
 # ─── Backoff calculator ──────────────────────────────────────────────────────
