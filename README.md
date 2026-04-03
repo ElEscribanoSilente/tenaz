@@ -169,7 +169,8 @@ from tenaz import CircuitOpen
 try:
     db_query()
 except CircuitOpen as e:
-    # e.until = timestamp when circuit will half-open
+    # e.until = estimated monotonic timestamp when the breaker may allow a call.
+    # In OPEN: when timeout expires. In HALF_OPEN: when a probe failure would reopen.
     return cached_response()
 ```
 
@@ -222,7 +223,7 @@ for attempt in retrying(max_attempts=3, backoff=0.5):
         connection = establish_connection()
 ```
 
-Each `attempt` is a context manager that catches retryable exceptions and suppresses them until the last attempt. On the final attempt, the exception propagates normally.
+Each `attempt` is a context manager that catches retryable exceptions and suppresses them. If all attempts fail, the iterator raises `RetryExhausted`, chained from the last exception.
 
 #### Async context manager
 
