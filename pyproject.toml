@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "tenaz"
 version = "2.1.0"
 description = "Tenacious retry with built-in circuit breaker. One file. Zero deps."
-readme = "README_tenaz.md"
+readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 authors = [{ name = "tenaz contributors" }]
