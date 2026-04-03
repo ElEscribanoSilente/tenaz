@@ -119,6 +119,7 @@ class _CircuitBreaker:
             return True
 
     def record_failure(self) -> None:
+        fire_hook = False
         with self._lock:
             if self._state == _BreakerState.HALF_OPEN:
                 # Probe failed — reopen with fresh timer
@@ -133,13 +134,20 @@ class _CircuitBreaker:
             if self._failures >= self.threshold:
                 self._state = _BreakerState.OPEN
                 self._opened_at = time.monotonic()
-                if self.on_open:
-                    self.on_open()
+                fire_hook = True
+        # Fire outside lock to prevent deadlock if callback touches the breaker
+        if fire_hook and self.on_open:
+            self.on_open()
 
     def record_success(self) -> None:
         with self._lock:
             self._state = _BreakerState.CLOSED
             self._failures = 0
+
+    def open_until(self) -> float:
+        """Return the monotonic timestamp when the breaker will half-open."""
+        with self._lock:
+            return self._opened_at + self.timeout
 
 
 # ─── Backoff calculator ──────────────────────────────────────────────────────
@@ -151,7 +159,11 @@ def _calc_delay(
     max_delay: float,
     jitter: bool,
 ) -> float:
-    delay = min(backoff * (2**attempt), max_delay)
+    # Clamp exponent to avoid computing astronomically large 2**attempt
+    # values before min() can cap them. 2**30 * any reasonable backoff
+    # already exceeds any practical max_delay.
+    exp = min(attempt, 30)
+    delay = min(backoff * (2**exp), max_delay)
     if jitter:
         delay = random.uniform(0, delay)  # Full jitter (AWS recommended)
     return delay
@@ -166,6 +178,25 @@ def _normalize_exc_types(
     if isinstance(val, type):
         return (val,)
     return tuple(val)
+
+
+def _safe_callback(fn: Callable, *args: Any) -> None:
+    """Call a user-provided hook, suppressing exceptions so they don't mask retry errors."""
+    try:
+        fn(*args)
+    except Exception:
+        pass  # hook failure must not interfere with retry logic
+
+
+def _safe_repr(obj: Any, limit: int = 200) -> str:
+    """Truncated repr to avoid leaking large/sensitive data in exception messages."""
+    try:
+        r = repr(obj)
+    except Exception:
+        return "<repr failed>"
+    if len(r) > limit:
+        return r[:limit] + "..."
+    return r
 
 
 def _validate_common(
@@ -246,7 +277,7 @@ def retry(
             @functools.wraps(fn)
             async def async_wrapper(*args: Any, **kwargs: Any) -> T:
                 if breaker and breaker.is_open:
-                    raise CircuitOpen(breaker._opened_at + breaker.timeout)
+                    raise CircuitOpen(breaker.open_until())
 
                 start_time = time.monotonic()
                 deadline = (
@@ -260,7 +291,7 @@ def retry(
                             last_exc,
                             time.monotonic() - start_time,
                             attempt,
-                        )
+                        ) from last_exc
                     try:
                         result = await fn(*args, **kwargs)
                     except abort_on_t:
@@ -276,14 +307,14 @@ def retry(
                                     delay, max(0, deadline - time.monotonic())
                                 )
                             if on_retry:
-                                on_retry(attempt + 1, exc, delay)
+                                _safe_callback(on_retry, attempt + 1, exc, delay)
                             await asyncio.sleep(delay)
                         continue
 
                     # result obtained — check predicate outside try block
                     if retry_on_result and retry_on_result(result):
                         last_exc = ValueError(
-                            f"retry_on_result rejected: {result!r}"
+                            f"retry_on_result rejected: {_safe_repr(result)}"
                         )
                         if breaker:
                             breaker.record_failure()
@@ -296,7 +327,7 @@ def retry(
                                     delay, max(0, deadline - time.monotonic())
                                 )
                             if on_retry:
-                                on_retry(attempt + 1, None, delay)
+                                _safe_callback(on_retry, attempt + 1, None, delay)
                             await asyncio.sleep(delay)
                         continue
 
@@ -305,8 +336,8 @@ def retry(
                     return result
 
                 if on_fail:
-                    on_fail(last_exc, max_attempts)
-                raise RetryExhausted(last_exc, max_attempts)
+                    _safe_callback(on_fail, last_exc, max_attempts)
+                raise RetryExhausted(last_exc, max_attempts) from last_exc
 
             return async_wrapper  # type: ignore[return-value]
 
@@ -314,7 +345,7 @@ def retry(
         @functools.wraps(fn)
         def sync_wrapper(*args: Any, **kwargs: Any) -> T:
             if breaker and breaker.is_open:
-                raise CircuitOpen(breaker._opened_at + breaker.timeout)
+                raise CircuitOpen(breaker.open_until())
 
             start_time = time.monotonic()
             deadline = (
@@ -328,7 +359,7 @@ def retry(
                         last_exc,
                         time.monotonic() - start_time,
                         attempt,
-                    )
+                    ) from last_exc
 
                 try:
                     result = fn(*args, **kwargs)
@@ -345,14 +376,14 @@ def retry(
                                 delay, max(0, deadline - time.monotonic())
                             )
                         if on_retry:
-                            on_retry(attempt + 1, exc, delay)
+                            _safe_callback(on_retry, attempt + 1, exc, delay)
                         time.sleep(delay)
                     continue
 
                 # result obtained — check predicate outside try block
                 if retry_on_result and retry_on_result(result):
                     last_exc = ValueError(
-                        f"retry_on_result rejected: {result!r}"
+                        f"retry_on_result rejected: {_safe_repr(result)}"
                     )
                     if breaker:
                         breaker.record_failure()
@@ -363,7 +394,7 @@ def retry(
                                 delay, max(0, deadline - time.monotonic())
                             )
                         if on_retry:
-                            on_retry(attempt + 1, None, delay)
+                            _safe_callback(on_retry, attempt + 1, None, delay)
                         time.sleep(delay)
                     continue
 
@@ -372,8 +403,8 @@ def retry(
                 return result
 
             if on_fail:
-                on_fail(last_exc, max_attempts)
-            raise RetryExhausted(last_exc, max_attempts)
+                _safe_callback(on_fail, last_exc, max_attempts)
+            raise RetryExhausted(last_exc, max_attempts) from last_exc
 
         return sync_wrapper  # type: ignore[return-value]
 
@@ -460,7 +491,7 @@ class retrying:
         for i in range(self._max):
             if deadline and time.monotonic() >= deadline:
                 exc = last_exc or Exception("unreachable")
-                raise RetryTimeout(exc, time.monotonic() - start_time, i)
+                raise RetryTimeout(exc, time.monotonic() - start_time, i) from exc
 
             if i > 0:
                 delay = _calc_delay(
@@ -469,7 +500,7 @@ class retrying:
                 if deadline:
                     delay = min(delay, max(0, deadline - time.monotonic()))
                 if self._on_retry and last_exc is not None:
-                    self._on_retry(i, last_exc, delay)
+                    _safe_callback(self._on_retry, i, last_exc, delay)
                 time.sleep(delay)
 
             is_last = i == self._max - 1
@@ -482,7 +513,7 @@ class retrying:
 
             # Last attempt failed — wrap in RetryExhausted
             if is_last and att.exception is not None:
-                raise RetryExhausted(att.exception, self._max)
+                raise RetryExhausted(att.exception, self._max) from att.exception
 
 
 # ─── Async context manager ───────────────────────────────────────────────────
@@ -536,7 +567,7 @@ class async_retrying:
         for i in range(self._max):
             if deadline and time.monotonic() >= deadline:
                 exc = last_exc or Exception("unreachable")
-                raise RetryTimeout(exc, time.monotonic() - start_time, i)
+                raise RetryTimeout(exc, time.monotonic() - start_time, i) from exc
 
             if i > 0:
                 delay = _calc_delay(
@@ -545,7 +576,7 @@ class async_retrying:
                 if deadline:
                     delay = min(delay, max(0, deadline - time.monotonic()))
                 if self._on_retry and last_exc is not None:
-                    self._on_retry(i, last_exc, delay)
+                    _safe_callback(self._on_retry, i, last_exc, delay)
                 await asyncio.sleep(delay)
 
             is_last = i == self._max - 1
@@ -557,7 +588,7 @@ class async_retrying:
             last_exc = att.exception
 
             if is_last and att.exception is not None:
-                raise RetryExhausted(att.exception, self._max)
+                raise RetryExhausted(att.exception, self._max) from att.exception
 
 
 # ─── Quick test ───────────────────────────────────────────────────────────────
