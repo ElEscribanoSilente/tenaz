@@ -132,9 +132,11 @@ class _CircuitBreaker:
                 self._state = _BreakerState.OPEN
                 self._opened_at = time.monotonic()
                 fire_hook = True
-        # Fire outside lock to prevent deadlock if callback touches the breaker
+        # Fire outside lock to prevent deadlock if callback touches the breaker.
+        # Routed through _safe_callback so a raising hook can't mask the retry
+        # error or break the call (consistent with on_retry / on_fail).
         if fire_hook and self.on_open:
-            self.on_open()
+            _safe_callback(self.on_open)
 
     def record_success(self) -> None:
         with self._lock:
@@ -231,7 +233,9 @@ def retry(
     retry_on: Union[
         Type[BaseException], Sequence[Type[BaseException]]
     ] = (Exception,),
-    abort_on: Sequence[Type[BaseException]] = (),
+    abort_on: Union[
+        Type[BaseException], Sequence[Type[BaseException]]
+    ] = (),
     retry_on_result: Optional[Callable[[Any], bool]] = None,
     on_retry: Optional[Callable[[int, BaseException | None, float], Any]] = None,
     on_fail: Optional[Callable[[BaseException, int], Any]] = None,
@@ -271,7 +275,7 @@ def retry(
         )
 
     retry_on_t = _normalize_exc_types(retry_on)
-    abort_on_t = tuple(abort_on)
+    abort_on_t = _normalize_exc_types(abort_on)
 
     breaker: Optional[_CircuitBreaker] = None
     if circuit_threshold > 0:
@@ -473,7 +477,9 @@ class retrying:
         retry_on: Union[
             Type[BaseException], Sequence[Type[BaseException]]
         ] = (Exception,),
-        abort_on: Sequence[Type[BaseException]] = (),
+        abort_on: Union[
+            Type[BaseException], Sequence[Type[BaseException]]
+        ] = (),
         total_timeout: float = 0.0,
         on_retry: Optional[Callable[[int, BaseException | None, float], Any]] = None,
     ) -> None:
@@ -485,7 +491,7 @@ class retrying:
         self._max_delay = max_delay
         self._jitter = jitter
         self._retry_on = _normalize_exc_types(retry_on)
-        self._abort_on = tuple(abort_on)
+        self._abort_on = _normalize_exc_types(abort_on)
         self._total_timeout = total_timeout
         self._on_retry = on_retry
 
@@ -546,7 +552,9 @@ class async_retrying:
         retry_on: Union[
             Type[BaseException], Sequence[Type[BaseException]]
         ] = (Exception,),
-        abort_on: Sequence[Type[BaseException]] = (),
+        abort_on: Union[
+            Type[BaseException], Sequence[Type[BaseException]]
+        ] = (),
         total_timeout: float = 0.0,
         on_retry: Optional[Callable[[int, BaseException | None, float], Any]] = None,
     ) -> None:
@@ -558,7 +566,7 @@ class async_retrying:
         self._max_delay = max_delay
         self._jitter = jitter
         self._retry_on = _normalize_exc_types(retry_on)
-        self._abort_on = tuple(abort_on)
+        self._abort_on = _normalize_exc_types(abort_on)
         self._total_timeout = total_timeout
         self._on_retry = on_retry
 

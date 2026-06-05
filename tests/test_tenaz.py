@@ -109,6 +109,20 @@ class TestRetrySyncAbortOn:
             fn()
         assert calls == 1
 
+    def test_abort_on_single_exception_type_not_tuple(self):
+        # abort_on accepts a bare type, mirroring retry_on (regression: #3)
+        calls = 0
+
+        @retry(max_attempts=5, backoff=0, abort_on=ValueError)
+        def fn():
+            nonlocal calls
+            calls += 1
+            raise ValueError("abort")
+
+        with pytest.raises(ValueError):
+            fn()
+        assert calls == 1
+
 
 class TestRetrySyncRetryOnResult:
     def test_retries_on_rejected_result(self):
@@ -314,6 +328,21 @@ class TestRetryAsync:
             await fn()
         assert 0.05 <= exc_info.value.elapsed <= 0.5
 
+    @pytest.mark.asyncio
+    async def test_abort_on_single_type(self):
+        # bare-type abort_on in the async decorator (regression: #3)
+        calls = 0
+
+        @retry(max_attempts=5, backoff=0, abort_on=TypeError)
+        async def fn():
+            nonlocal calls
+            calls += 1
+            raise TypeError("abort")
+
+        with pytest.raises(TypeError):
+            await fn()
+        assert calls == 1
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Circuit Breaker
@@ -437,6 +466,34 @@ class TestCircuitBreaker:
             fn()
         assert calls == 3  # not called
 
+    def test_on_open_exception_does_not_break_breaker(self):
+        # A raising on_open hook is swallowed; the breaker still opens (regression: #2)
+        def boom():
+            raise RuntimeError("hook exploded")
+
+        cb = _CircuitBreaker(threshold=1, timeout=10.0, on_open=boom)
+        cb.record_failure()  # must not propagate the hook's RuntimeError
+        assert cb.is_open
+
+    def test_decorator_on_circuit_open_exception_suppressed(self):
+        # A raising on_circuit_open must not mask the real retry error (regression: #2)
+        def boom():
+            raise RuntimeError("hook exploded")
+
+        @retry(
+            max_attempts=1,
+            backoff=0,
+            circuit_threshold=1,
+            circuit_timeout=30.0,
+            on_circuit_open=boom,
+        )
+        def fn():
+            raise ConnectionError("svc down")
+
+        with pytest.raises(RetryExhausted) as exc_info:
+            fn()
+        assert isinstance(exc_info.value.last_exception, ConnectionError)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Backoff
@@ -494,6 +551,16 @@ class TestRetryingSync:
             for attempt in retrying(
                 max_attempts=5, backoff=0, abort_on=(TypeError,)
             ):
+                with attempt:
+                    calls += 1
+                    raise TypeError("abort")
+        assert calls == 1
+
+    def test_abort_on_single_type(self):
+        # bare-type abort_on in the sync context manager (regression: #3)
+        calls = 0
+        with pytest.raises(TypeError):
+            for attempt in retrying(max_attempts=5, backoff=0, abort_on=TypeError):
                 with attempt:
                     calls += 1
                     raise TypeError("abort")
@@ -566,6 +633,19 @@ class TestRetryingAsync:
             ):
                 with attempt:
                     raise ValueError("fail")
+
+    @pytest.mark.asyncio
+    async def test_abort_on_single_type(self):
+        # bare-type abort_on in the async context manager (regression: #3)
+        calls = 0
+        with pytest.raises(TypeError):
+            async for attempt in async_retrying(
+                max_attempts=5, backoff=0, abort_on=TypeError
+            ):
+                with attempt:
+                    calls += 1
+                    raise TypeError("abort")
+        assert calls == 1
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
