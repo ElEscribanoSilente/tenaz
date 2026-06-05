@@ -298,7 +298,8 @@ def retry(
                 last_exc: BaseException = Exception("unreachable")
 
                 for attempt in range(max_attempts):
-                    if deadline and time.monotonic() >= deadline:
+                    # First attempt always runs (see sync path for rationale).
+                    if attempt > 0 and deadline and time.monotonic() >= deadline:
                         raise RetryTimeout(
                             last_exc,
                             time.monotonic() - start_time,
@@ -366,7 +367,10 @@ def retry(
             last_exc: BaseException = Exception("unreachable")
 
             for attempt in range(max_attempts):
-                if deadline and time.monotonic() >= deadline:
+                # The first attempt always runs: total_timeout bounds the retry
+                # waiting, not the initial call. This also guarantees last_exc is
+                # a real exception by the time RetryTimeout can fire (no sentinel).
+                if attempt > 0 and deadline and time.monotonic() >= deadline:
                     raise RetryTimeout(
                         last_exc,
                         time.monotonic() - start_time,
@@ -503,7 +507,9 @@ class retrying:
         last_exc: BaseException | None = None
 
         for i in range(self._max):
-            if deadline and time.monotonic() >= deadline:
+            # First iteration always runs; the deadline bounds retries, not the
+            # initial attempt — so last_exc is set before this can fire.
+            if i > 0 and deadline and time.monotonic() >= deadline:
                 exc = last_exc or Exception("unreachable")
                 raise RetryTimeout(exc, time.monotonic() - start_time, i) from exc
 
@@ -581,7 +587,9 @@ class async_retrying:
         last_exc: BaseException | None = None
 
         for i in range(self._max):
-            if deadline and time.monotonic() >= deadline:
+            # First iteration always runs; the deadline bounds retries, not the
+            # initial attempt — so last_exc is set before this can fire.
+            if i > 0 and deadline and time.monotonic() >= deadline:
                 exc = last_exc or Exception("unreachable")
                 raise RetryTimeout(exc, time.monotonic() - start_time, i) from exc
 
