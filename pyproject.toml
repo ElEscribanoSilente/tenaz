@@ -30,8 +30,7 @@ Homepage = "https://github.com/ElEscribanoSilente/tenaz"
 Issues = "https://github.com/ElEscribanoSilente/tenaz/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["."]
-include = ["tenaz.py", "py.typed"]
+only-include = ["tenaz.py", "py.typed"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
