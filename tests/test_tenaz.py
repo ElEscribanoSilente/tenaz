@@ -185,6 +185,25 @@ class TestRetrySyncTimeout:
         # elapsed should be close to 0.1, not exactly 0.1
         assert 0.05 <= exc_info.value.elapsed <= 0.5
 
+    def test_tiny_timeout_runs_once_and_reports_real_exception(self):
+        # Regression #4: a sub-microsecond total_timeout must still run the
+        # first attempt and report the real exception, never the internal
+        # "unreachable" sentinel with attempts=0.
+        calls = 0
+
+        @retry(max_attempts=5, backoff=0, total_timeout=1e-9)
+        def fn():
+            nonlocal calls
+            calls += 1
+            raise ConnectionError("down")
+
+        with pytest.raises(RetryTimeout) as exc_info:
+            fn()
+
+        assert calls >= 1
+        assert exc_info.value.attempts >= 1
+        assert isinstance(exc_info.value.last_exception, ConnectionError)
+
 
 class TestRetrySyncHooks:
     def test_on_retry_called(self):
@@ -342,6 +361,23 @@ class TestRetryAsync:
         with pytest.raises(TypeError):
             await fn()
         assert calls == 1
+
+    @pytest.mark.asyncio
+    async def test_tiny_timeout_runs_once_and_reports_real_exception(self):
+        # Regression #4 (async decorator path).
+        calls = 0
+
+        @retry(max_attempts=5, backoff=0, total_timeout=1e-9)
+        async def fn():
+            nonlocal calls
+            calls += 1
+            raise ConnectionError("down")
+
+        with pytest.raises(RetryTimeout) as exc_info:
+            await fn()
+
+        assert calls >= 1
+        assert isinstance(exc_info.value.last_exception, ConnectionError)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -574,6 +610,18 @@ class TestRetryingSync:
                 with attempt:
                     raise ValueError("fail")
 
+    def test_tiny_timeout_runs_once_no_sentinel(self):
+        # Regression #4: the CM must run the first attempt before timing out,
+        # so last_exception is the real error, not the "unreachable" sentinel.
+        calls = 0
+        with pytest.raises(RetryTimeout) as exc_info:
+            for attempt in retrying(max_attempts=5, backoff=0, total_timeout=1e-9):
+                with attempt:
+                    calls += 1
+                    raise ConnectionError("down")
+        assert calls >= 1
+        assert isinstance(exc_info.value.last_exception, ConnectionError)
+
     def test_on_retry_hook(self):
         hook_calls = []
         calls = 0
@@ -646,6 +694,20 @@ class TestRetryingAsync:
                     calls += 1
                     raise TypeError("abort")
         assert calls == 1
+
+    @pytest.mark.asyncio
+    async def test_tiny_timeout_runs_once_no_sentinel(self):
+        # Regression #4 (async context manager).
+        calls = 0
+        with pytest.raises(RetryTimeout) as exc_info:
+            async for attempt in async_retrying(
+                max_attempts=5, backoff=0, total_timeout=1e-9
+            ):
+                with attempt:
+                    calls += 1
+                    raise ConnectionError("down")
+        assert calls >= 1
+        assert isinstance(exc_info.value.last_exception, ConnectionError)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
