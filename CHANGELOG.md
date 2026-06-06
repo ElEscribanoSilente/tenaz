@@ -1,14 +1,14 @@
 # Changelog
 
-## 2.1.0 — 2025-XX-XX
+## 2.1.0 — 2026-04-03
 
 ### Bug Fixes
 
 - **Circuit breaker half-open race condition**: The previous implementation reset
   `_failures = 0` on timeout expiry, allowing multiple concurrent callers through
   when only one probe should be allowed. Now uses an explicit three-state machine
-  (`CLOSED` / `OPEN` / `HALF_OPEN`) with an atomic `_half_open_allowed` flag so
-  exactly one probe call passes in half-open state.
+  (`CLOSED` / `OPEN` / `HALF_OPEN`): the transition into `HALF_OPEN` happens under
+  the breaker lock, so exactly one probe call passes in half-open state.
 
 - **`record_failure()` re-triggering**: Previously, every failure past the threshold
   re-fired `on_circuit_open` and reset `_opened_at`, which could extend the open

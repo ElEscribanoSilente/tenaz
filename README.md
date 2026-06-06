@@ -7,7 +7,7 @@
 [![Downloads](https://img.shields.io/pypi/dm/tenaz)](https://pypistats.org/packages/tenaz)
 
 **Production-grade retry with built-in circuit breaker for Python.**
-*Exponential backoff · Full jitter · Sync + Async · ~565 lines · Zero dependencies.*
+*Exponential backoff · Full jitter · Sync + Async · ~660 lines · Zero dependencies.*
 
 ```python
 from tenaz import retry
@@ -38,7 +38,7 @@ Every retry library makes the same tradeoffs wrong:
 | Async context manager | ✓ | ✗ | ✗ | ✗ |
 | Lifecycle hooks | ✓ | partial | partial | ✗ |
 | Dependencies | **0** | 0 | 0 | 0 |
-| Lines of code | **~565** | 800+ | 400+ | 300+ |
+| Lines of code | **~660** | 800+ | 400+ | 300+ |
 | Maintained (2025+) | ✓ | ✓ | ✓ | **✗ abandoned** |
 
 **tenacity** is the industry standard — and it's good. But its API is confusing (`retry_if_exception_type` vs `retry_if_not_exception_type` vs `retry_if_exception_message`...), it has no circuit breaker, and you'll need `pybreaker` or `circuitbreaker` as a separate package.
