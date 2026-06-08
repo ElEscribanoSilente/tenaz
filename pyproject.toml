@@ -32,6 +32,20 @@ Issues = "https://github.com/ElEscribanoSilente/tenaz/issues"
 [tool.hatch.build.targets.wheel]
 only-include = ["tenaz.py", "py.typed"]
 
+[tool.hatch.build.targets.sdist]
+# Explicit allowlist so the source distribution is deterministic and never
+# sweeps in stray local files (e.g. .claude/, only ignored by a global
+# gitignore that hatchling does not consult).
+only-include = [
+    "tenaz.py",
+    "py.typed",
+    "tests",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "pyproject.toml",
+]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
