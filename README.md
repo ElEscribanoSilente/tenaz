@@ -394,6 +394,23 @@ def service_call():
 # - If test fails → circuit reopens for another 30s
 ```
 
+### Scope: the breaker gates *new calls*, not the in-flight retry loop
+
+`is_open` is checked once, when a decorated call **starts**. Within that call the
+`max_attempts` retry loop always runs to completion — even if those failures trip
+the breaker partway through. The breaker only fast-fails the **next** call.
+
+```python
+@retry(max_attempts=100, circuit_threshold=5)
+def call(): ...
+# One failing call still makes all 100 attempts: the breaker opens at failure 5,
+# but the loop already in flight is not interrupted. The *next* call() is the
+# first to raise CircuitOpen.
+```
+
+Keep `circuit_threshold >= max_attempts` if you want the breaker to trip only
+**between** calls, so a single call's retries are never cut short mid-sequence.
+
 ---
 
 ## Real-World Examples

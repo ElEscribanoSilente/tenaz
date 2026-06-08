@@ -259,6 +259,9 @@ def retry(
         on_fail:            Hook(last_exception, total_attempts) when exhausted.
         total_timeout:      Max wall-clock seconds for all attempts combined (0 = unlimited).
         circuit_threshold:  Consecutive failures to trip breaker (0 = disabled).
+                            Checked at call start only; an in-flight call still
+                            runs all max_attempts (keep >= max_attempts to trip
+                            only between calls).
         circuit_timeout:    Seconds breaker stays open before half-open test.
         on_circuit_open:    Hook called when breaker trips.
     """
