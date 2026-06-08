@@ -28,6 +28,7 @@ from typing import (
     Any,
     Callable,
     Optional,
+    ParamSpec,
     Sequence,
     Type,
     TypeVar,
@@ -45,6 +46,7 @@ __all__ = [
 ]
 
 T = TypeVar("T")
+P = ParamSpec("P")
 
 
 # ─── Exceptions ───────────────────────────────────────────────────────────────
@@ -243,7 +245,7 @@ def retry(
     circuit_threshold: int = 0,
     circuit_timeout: float = 30.0,
     on_circuit_open: Optional[Callable] = None,
-) -> Callable:
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
     """
     Universal retry decorator. Works on sync AND async functions.
 
@@ -281,13 +283,13 @@ def retry(
     if circuit_threshold > 0:
         breaker = _CircuitBreaker(circuit_threshold, circuit_timeout, on_circuit_open)
 
-    def decorator(fn: Callable[..., T]) -> Callable[..., T]:
+    def decorator(fn: Callable[P, T]) -> Callable[P, T]:
 
         # ── Async path ────────────────────────────────────────────────────
         if asyncio.iscoroutinefunction(fn):
 
             @functools.wraps(fn)
-            async def async_wrapper(*args: Any, **kwargs: Any) -> T:
+            async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
                 if breaker and breaker.is_open:
                     raise CircuitOpen(breaker.open_until())
 
@@ -356,7 +358,7 @@ def retry(
 
         # ── Sync path ─────────────────────────────────────────────────────
         @functools.wraps(fn)
-        def sync_wrapper(*args: Any, **kwargs: Any) -> T:
+        def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
             if breaker and breaker.is_open:
                 raise CircuitOpen(breaker.open_until())
 
