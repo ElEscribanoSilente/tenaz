@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tenaz"
-version = "2.1.0"
+version = "2.2.0"
 description = "Tenacious retry with built-in circuit breaker. One file. Zero deps."
 readme = "README.md"
 license = "MIT"
