@@ -257,6 +257,9 @@ def retry(
         retry_on:           Exception types that trigger retry.
         abort_on:           Exception types that abort immediately (overrides retry_on).
         retry_on_result:    Predicate on return value — if True, treat as failure and retry.
+                            Security: a rejected result's repr (truncated to
+                            ~200 chars) is embedded in the RetryExhausted
+                            message — don't return secrets verbatim.
         on_retry:           Hook(attempt, exception_or_None, delay) before each retry sleep.
         on_fail:            Hook(last_exception, total_attempts) when exhausted.
         total_timeout:      Max wall-clock seconds for all attempts combined (0 = unlimited).

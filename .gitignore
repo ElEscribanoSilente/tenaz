@@ -7,3 +7,6 @@ build/
 .pytest_cache/
 .coverage
 *.egg
+
+# Local agent/editor state (also covered by a global gitignore on some setups)
+.claude/
