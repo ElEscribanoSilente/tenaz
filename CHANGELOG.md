@@ -1,5 +1,44 @@
 # Changelog
 
+## 2.2.0 — 2026-06-08
+
+### Packaging
+
+- The published **wheel** and **source distribution** now ship only the intended
+  files. Previously the wheel bundled the whole repo (including a top-level
+  `tests` package) into `site-packages`, and the sdist could sweep in stray local
+  files; both are now restricted to explicit allowlists.
+
+### Bug Fixes
+
+- **`on_circuit_open` hook isolation**: a raising `on_circuit_open` hook no longer
+  propagates out of the call or masks the real retry error — it is now suppressed
+  like `on_retry` / `on_fail`.
+- **`total_timeout` no longer surfaces an internal sentinel**: a very small
+  `total_timeout` previously raised `RetryTimeout` with a placeholder exception
+  and `attempts=0`. The first attempt now always runs (at-least-once), so
+  `RetryTimeout` always carries a real `last_exception`.
+
+### Features
+
+- **`abort_on` accepts a bare exception type** (e.g. `abort_on=ValueError`), not
+  just a sequence — symmetric with `retry_on`.
+- **Typed decorator**: `@retry(...)` now preserves the decorated function's full
+  signature (parameters and return type, sync and async) for type checkers, via
+  `ParamSpec`. No runtime change.
+
+### Documentation
+
+- Clarified that the circuit breaker gates *new calls*, not the in-flight retry
+  loop (keep `circuit_threshold >= max_attempts` to trip only between calls).
+- Noted that `retry_on_result` embeds a truncated repr of a rejected value in the
+  `RetryExhausted` message.
+
+### Infrastructure
+
+- Added CI (GitHub Actions): pytest on Python 3.10–3.13 plus a `mypy` type-check,
+  with third-party actions pinned to commit SHAs.
+
 ## 2.1.0 — 2026-04-03
 
 ### Bug Fixes
